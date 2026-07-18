@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stream Overlay</title>
+    
+    <style>
+        body, html {
+            margin: 0;
+            padding: 24px;
+            width: 100%;
+            height: 100%;
+            background-color: transparent;
+            display: flex;
+            align-items: flex-start;
+            justify-content: flex-start;
+            overflow: hidden;
+            font-family: Arial, Helvetica, sans-serif;
+            color: #ffffff;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            box-sizing: border-box;
+        }
+
+        .overlay-widget {
+            position: relative;
+            width: 380px;
+            background-color: transparent;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 12px;
+            transition: opacity 0.3s ease-in-out;
+            opacity: 1;
+        }
+
+        .overlay-widget.hidden-state {
+            opacity: 0;
+        }
+
+        .overlay-widget.cycle-hidden {
+            opacity: 0 !important;
+            pointer-events: none;
+        }
+
+        .image-container-16-9 {
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            background-color: transparent;
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            overflow: hidden;
+            position: relative;
+            border-radius: 6px;
+        }
+
+        .overlay-image {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            display: block;
+        }
+
+        .badge {
+            display: inline-block;
+            font-size: 14px;
+            font-weight: bold;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            padding: 4px 12px;
+            border-radius: 4px;
+            color: #ffffff;
+            text-align: center;
+            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.4);
+            margin-top: 4px;
+            z-index: 10;
+            transition: all 0.3s ease;
+        }
+
+        .has-image .badge {
+            position: absolute;
+            top: 213.75px; 
+            left: 0;
+            transform: translateY(-50%);
+            margin-top: 0;
+        }
+
+        .single-line-text {
+            font-size: 28px;
+            font-weight: bold;
+            color: #ffffff;
+            text-align: left;
+            line-height: 1.2;
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            box-sizing: border-box;
+            text-shadow: 
+                3px 3px 4px rgba(0, 0, 0, 0.9),
+                -1.5px -1.5px 0 rgba(0, 0, 0, 0.9),  
+                 1.5px -1.5px 0 rgba(0, 0, 0, 0.9),
+                -1.5px  1.5px 0 rgba(0, 0, 0, 0.9),
+                 1.5px  1.5px 0 rgba(0, 0, 0, 0.9);
+            transition: margin-top 0.3s ease;
+        }
+
+        .has-image .single-line-text {
+            margin-top: 20px;
+        }
+
+
+        
+        .test-controls {
+            position: absolute;
+            bottom: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+            background-color: rgba(0, 0, 0, 0.85);
+            padding: 8px 16px;
+            border-radius: 8px;
+            opacity: 0.1;
+            transition: opacity 0.2s ease;
+            z-index: 100;
+        }
+        .test-controls:hover {
+            opacity: 1;
+        }
+        .test-btn {
+            background-color: #222;
+            color: #fff;
+            border: 1px solid #444;
+            border-radius: 4px;
+            padding: 6px 12px;
+            font-size: 13px;
+            cursor: pointer;
+            font-family: Arial, sans-serif;
+        }
+        .test-btn:hover {
+            background-color: #333;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="widget" class="overlay-widget">
+        
+        <div id="image-frame" class="image-container-16-9">
+            <img id="overlay-pic" src="image_2b7a3f.png" onerror="handleImageError()" alt="Graphic Asset" class="overlay-image">
+        </div>
+
+        <span id="overlay-badge" class="badge" style="background-color: #9333ea;">// FANART SHOWCASE //</span>
+
+        <h2 id="overlay-text" class="single-line-text">Scanning folder...</h2>
+
+    </div>
+
+    <div class="test-controls">
+        <button class="test-btn" onclick="prevSlide()">◀ Prev</button>
+        <button id="play-pause-btn" class="test-btn" onclick="togglePlayPause()">Pause</button>
+        <button class="test-btn" onclick="nextSlide()">Next ▶</button>
+    </div>
+
+    <script>
+        let fanartPool = [];
+        let discordPool = [];
+        let currentTick = 0;
+        let fanartIndex = 0;
+        let rotationTimer = null;
+        let isPlaying = true;
+        let lastDisplayedKey = null;
+
+        const maxTicks = 30; // 2.5 minutes loop total (30 ticks * 5 seconds)
+        const activeTicks = 12; // 1 minute active window (12 ticks * 5 seconds)
+
+        const defaultDiscordSlide = {
+            image: "", 
+            badge: "Discord Community",
+            badgeColor: "#5865F2",
+            text: "Join Our Server :3"
+        };
+
+        window.onload = async function() {
+            await scanImagesDirectory();
+            updateCycle();
+            startRotator();
+        };
+
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        async function scanImagesDirectory() {
+            try {
+                const response = await fetch('./images/');
+                if (!response.ok) {
+                    throw new Error("Could not fetch directory contents");
+                }
+
+                const textHTML = await response.text();
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(textHTML, 'text/html');
+                
+                const imageExtensions = /\.(jpe?g|png|gif|webp|svg)$/i;
+                const links = Array.from(doc.querySelectorAll('a'));
+                
+                const foundImages = links
+                    .map(link => link.getAttribute('href'))
+                    .filter(href => href && href.match(imageExtensions))
+                    .map(href => {
+                        if (!href.startsWith('http') && !href.startsWith('/') && !href.startsWith('./')) {
+                            return './images/' + href;
+                        }
+                        return href;
+                    });
+
+                const uniqueImages = [...new Set(foundImages)];
+
+                if (uniqueImages.length > 0) {
+                    const processedSlides = uniqueImages.map(imgUrl => {
+                        const filenameWithExt = imgUrl.substring(imgUrl.lastIndexOf('/') + 1);
+                        const decodedFilenameWithExt = decodeURIComponent(filenameWithExt);
+                        const filename = decodedFilenameWithExt.replace(/\.[^/.]+$/, ""); 
+                        
+                        let cleanLabel = filename
+                            .replace(/\(at\)/gi, "@")
+                            .replace(/\[at\]/gi, "@");
+
+                        cleanLabel = cleanLabel.replace(/\s*\([^)]*\)/g, "").replace(/\s*\[[^\]]*\]/g, "");
+
+                        cleanLabel = cleanLabel.replace(/(?:^|[\s_])at_/gi, (match) => {
+                            if (match.startsWith(' ') || match.startsWith('_')) {
+                                return " @";
+                            }
+                            return "@";
+                        });
+
+                        const isDiscord = cleanLabel.toLowerCase().includes('discord');
+                        cleanLabel = cleanLabel.replace(/-/g, " ");
+
+                        let words = cleanLabel.split(' ');
+                        words = words.map(word => {
+                            if (word.startsWith('@')) {
+                                return word; 
+                            }
+                            return word.replace(/_/g, " "); 
+                        });
+                        cleanLabel = words.join(' ').replace(/\s+/g, " ").trim();
+                        cleanLabel = cleanLabel.replace(/\b(by)\s+@/gi, "$1: @");
+
+                        return {
+                            image: imgUrl,
+                            badge: isDiscord ? "Discord Community" : "// FANART SHOWCASE //",
+                            badgeColor: isDiscord ? "#5865F2" : "#9333ea", 
+                            text: isDiscord ? "Join Our Server NOW" : (cleanLabel || "Community Submission")
+                        };
+                    });
+
+                    fanartPool = processedSlides.filter(s => s.badge !== "Discord Community");
+                    discordPool = processedSlides.filter(s => s.badge === "Discord Community");
+
+                    shuffleArray(fanartPool);
+                    if (discordPool.length > 0) {
+                        shuffleArray(discordPool);
+                    }
+                }
+            } catch (err) {
+                console.log("Directory scanning empty or unavailable.");
+            }
+        }
+
+        // # if currenttick is less than nine, output the corresponding fanart slide based on the two tick interval; if currenttick is less than twelve, output the discord slide layout; otherwise, fall back to rendering the hidden state
+        function updateCycle() {
+            if (currentTick < 9) {
+                let slide = { text: "// the folder is empty //", image: "", badge: "", badgeColor: "" };
+                if (fanartPool.length > 0) {
+                    let localOffset = Math.min(Math.floor(currentTick / 2), 3);
+                    slide = fanartPool[(fanartIndex + localOffset) % fanartPool.length];
+                }
+                renderSlide(slide, false);
+            } else if (currentTick < 12) {
+                let slide = discordPool.length > 0 ? discordPool[0] : defaultDiscordSlide;
+                renderSlide(slide, false);
+            } else {
+                renderSlide(null, true);
+            }
+        }
+
+        function renderSlide(slide, isHiddenCycle) {
+            const widget = document.getElementById('widget');
+            
+            // # generate a unique key string matching the layout properties to identify if the target asset has altered from the active domestic state; if currentkey matches lastdisplayedkey, return and break execution
+            let currentKey = isHiddenCycle ? 'hidden' : (slide.image + '|' + slide.text + '|' + slide.badge + '|' + slide.badgeColor);
+            if (currentKey === lastDisplayedKey) return;
+            lastDisplayedKey = currentKey;
+
+            widget.classList.add('hidden-state');
+
+            setTimeout(() => {
+                if (isHiddenCycle) {
+                    widget.classList.add('cycle-hidden');
+                    return;
+                }
+                
+                widget.classList.remove('cycle-hidden');
+                const imgFrame = document.getElementById('image-frame');
+                const imgElement = document.getElementById('overlay-pic');
+                const badgeElement = document.getElementById('overlay-badge');
+                const textElement = document.getElementById('overlay-text');
+
+                if (slide.image && slide.image.trim() !== "") {
+                    imgElement.src = slide.image;
+                    imgFrame.style.display = "flex"; 
+                    widget.classList.add('has-image');
+                } else {
+                    imgElement.src = "";
+                    imgFrame.style.display = "none"; 
+                    widget.classList.remove('has-image');
+                }
+
+                textElement.innerText = slide.text;
+
+                if (slide.badge && slide.badge.trim() !== "") {
+                    badgeElement.innerText = slide.badge.toUpperCase();
+                    badgeElement.style.backgroundColor = slide.badgeColor;
+                    badgeElement.style.display = "inline-block";
+                } else {
+                    badgeElement.style.display = "none";
+                }
+
+                widget.classList.remove('hidden-state');
+            }, 300);
+        }
+
+        function handleImageError() {
+            document.getElementById('image-frame').style.display = "none";
+            document.getElementById('widget').classList.remove('has-image');
+        }
+
+        function startRotator() {
+            if (rotationTimer) clearInterval(rotationTimer);
+            if (!isPlaying) return;
+
+            rotationTimer = setInterval(() => {
+                nextTick();
+            }, 5000);
+        }
+
+        function stopRotator() {
+            if (rotationTimer) {
+                clearInterval(rotationTimer);
+                rotationTimer = null;
+            }
+        }
+
+        // # increment currenttick by one; if currenttick reaches or exceeds maxticks, reset trackers to zero, offset the base fanart rotation tracker by four, and run shufflearray to mix pool components
+        function nextTick() {
+            currentTick++;
+            
+            if (currentTick >= maxTicks) {
+                currentTick = 0;
+                fanartIndex = (fanartIndex + 4) % (fanartPool.length || 1);
+                shuffleArray(fanartPool);
+                if (discordPool.length > 0) shuffleArray(discordPool);
+            }
+            updateCycle();
+        }
+
+        function nextSlide() {
+            if (currentTick < 2) currentTick = 2;
+            else if (currentTick < 4) currentTick = 4;
+            else if (currentTick < 6) currentTick = 6;
+            else if (currentTick < 9) currentTick = 9;
+            else if (currentTick < 12) currentTick = 12;
+            else {
+                currentTick = 0;
+                fanartIndex = (fanartIndex + 4) % (fanartPool.length || 1);
+            }
+            updateCycle();
+        }
+
+        function prevSlide() {
+            if (currentTick >= 12) currentTick = 9;
+            else if (currentTick >= 9) currentTick = 6;
+            else if (currentTick >= 6) currentTick = 4;
+            else if (currentTick >= 4) currentTick = 2;
+            else if (currentTick >= 2) currentTick = 0;
+            else {
+                currentTick = 12;
+            }
+            updateCycle();
+        }
+
+        function togglePlayPause() {
+            isPlaying = !isPlaying;
+            const btn = document.getElementById('play-pause-btn');
+            if (isPlaying) {
+                startRotator();
+                btn.innerText = "Pause";
+            } else {
+                stopRotator();
+                btn.innerText = "Play";
+            }
+        }
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'ArrowRight') {
+                nextSlide();
+            } else if (e.key === 'ArrowLeft') {
+                prevSlide();
+            } else if (e.key === ' ' || e.key === 'Spacebar') {
+                e.preventDefault();
+                togglePlayPause();
+            }
+        });
+    </script>
+</body>
+</html>
