@@ -7,7 +7,7 @@
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <!-- Imports Montserrat weight 800 normal and weight 800 italic -->
+    <!-- Import Google Font Montserrat (Weights 800 and 800 Italic for clean, slanted stream look) -->
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,800;1,800&display=swap" rel="stylesheet">
     
     <style>
@@ -38,12 +38,15 @@
             flex-direction: column;
             align-items: flex-start;
             gap: 12px;
-            transition: opacity 0.3s ease-in-out;
+            transition: opacity 0.4s cubic-bezier(0.25, 1, 0.5, 1), transform 0.4s cubic-bezier(0.25, 1, 0.5, 1);
             opacity: 1;
+            transform: translateX(0);
         }
 
+        /* Smooth fade and slide out during transition states */
         .overlay-widget.hidden-state {
             opacity: 0;
+            transform: translateX(-15px);
         }
 
         .overlay-widget.cycle-hidden {
@@ -60,7 +63,8 @@
             justify-content: flex-start;
             overflow: hidden;
             position: relative;
-            border-radius: 6px;
+            border-radius: 8px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
         }
 
         .overlay-image {
@@ -76,18 +80,19 @@
             font-weight: 800;
             font-family: 'Montserrat', Arial, Helvetica, sans-serif;
             font-style: italic;
-            letter-spacing: 1px;
+            letter-spacing: 1.5px;
             text-transform: uppercase;
-            padding: 4px 12px;
+            padding: 5px 14px;
             border-radius: 4px;
             color: #ffffff;
             text-align: center;
-            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.4);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
             margin-top: 4px;
             z-index: 10;
-            transition: all 0.3s ease;
+            transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
         }
 
+        /* Dynamically align overlay text and badges when active image container is present */
         .has-image .badge {
             position: absolute;
             top: 213.75px; 
@@ -103,17 +108,18 @@
             font-style: italic;
             color: #ffffff;
             text-align: left;
-            line-height: 1.2;
+            line-height: 1.25;
             margin: 0;
             padding: 0;
             width: 100%;
             box-sizing: border-box;
+            /* Premium outlines and thick shadows to stand out against bright video streams */
             text-shadow: 
-                3px 3px 4px rgba(0, 0, 0, 0.9),
-                -1.5px -1.5px 0 rgba(0, 0, 0, 0.9),  
-                 1.5px -1.5px 0 rgba(0, 0, 0, 0.9),
-                -1.5px  1.5px 0 rgba(0, 0, 0, 0.9),
-                 1.5px  1.5px 0 rgba(0, 0, 0, 0.9);
+                3px 3px 4px rgba(0, 0, 0, 0.95),
+                -1.5px -1.5px 0 rgba(0, 0, 0, 0.95),  
+                 1.5px -1.5px 0 rgba(0, 0, 0, 0.95),
+                -1.5px  1.5px 0 rgba(0, 0, 0, 0.95),
+                 1.5px  1.5px 0 rgba(0, 0, 0, 0.95);
             transition: margin-top 0.3s ease;
         }
 
@@ -121,6 +127,7 @@
             margin-top: 20px;
         }
 
+        /* Test control panels configured cleanly for offline management */
         .test-controls {
             position: absolute;
             bottom: 15px;
@@ -167,10 +174,11 @@
 
         <span id="overlay-badge" class="badge" style="background-color: #9333ea;">// FANART SHOWCASE //</span>
 
-        <h2 id="overlay-text" class="single-line-text">Scanning folder...</h2>
+        <h2 id="overlay-text" class="single-line-text">Scanning folders...</h2>
 
     </div>
 
+    <!-- Manual Control Panel (visible only when hovered at the bottom edge) -->
     <div class="test-controls">
         <button class="test-btn" onclick="prevSlide()">◀ Prev</button>
         <button id="play-pause-btn" class="test-btn" onclick="togglePlayPause()">Pause</button>
@@ -211,33 +219,72 @@
         }
 
         async function scanImagesDirectory() {
-            const isGitHubPages = window.location.hostname.endsWith('.github.io');
+            // Determine if we're running locally or on a production host (GitHub Pages/Custom Domain)
+            const isLocal = window.location.hostname === 'localhost' || 
+                            window.location.hostname === '127.0.0.1' || 
+                            window.location.protocol === 'file:';
+            
+            const isProductionHosted = !isLocal;
             const imageExtensions = /\.(jpe?g|png|gif|webp|svg)$/i;
             let foundImages = [];
 
             try {
-                if (isGitHubPages) {
-                    // Extract Owner and Repository details directly from the URL
+                if (isProductionHosted) {
+                    // Extract Owner and Repository details dynamically from window location
                     const pathSegments = window.location.pathname.split('/').filter(Boolean);
-                    const owner = window.location.hostname.split('.')[0];
                     
-                    // If pathSegments is empty, this is a user page (repo is named 'username.github.io')
-                    const repo = pathSegments.length > 0 ? pathSegments[0] : `${owner}.github.io`;
+                    // Default fallbacks matched specifically to your setup
+                    let owner = "r12azqha";
+                    let repo = "fanart-overlay";
                     
-                    const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/images`;
+                    // Parse custom domains (like r12azqha.com) or standard github.io addresses
+                    const hostParts = window.location.hostname.split('.');
+                    if (hostParts.length > 0 && hostParts[0] !== 'www') {
+                        owner = hostParts[0]; 
+                    }
                     
-                    const response = await fetch(apiUrl);
-                    if (!response.ok) throw new Error("GitHub API failed or folder does not exist");
+                    if (pathSegments.length > 0) {
+                        repo = pathSegments[0];
+                    }
+                    
+                    // We target the docs/images directory first based on repository structure
+                    let apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/docs/images`;
+                    let isDocsFolder = true;
+                    
+                    let response = await fetch(apiUrl);
+                    if (!response.ok) {
+                        // Fallback to root images folder if docs/images fails
+                        apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/images`;
+                        isDocsFolder = false;
+                        response = await fetch(apiUrl);
+                    }
+                    
+                    if (!response.ok) throw new Error("GitHub API content scan failed");
                     
                     const files = await response.json();
                     foundImages = files
                         .filter(file => file.type === 'file' && file.name.match(imageExtensions))
-                        .map(file => file.path); // Path relative to root, e.g. "images/file.png"
+                        .map(file => {
+                            // Strip "docs/" from the path if GitHub Pages is running out of the docs folder.
+                            // The live URL serves files directly from the docs root path.
+                            let resolvedPath = file.path;
+                            if (isDocsFolder && resolvedPath.startsWith('docs/')) {
+                                resolvedPath = resolvedPath.substring(5); // removes 'docs/'
+                            }
+                            return resolvedPath;
+                        });
                         
                 } else {
-                    // Local Development Fallback: Attempt local directory index fetching (e.g. Live Server)
-                    const response = await fetch('./images/');
-                    if (!response.ok) throw new Error("Could not fetch local directory contents");
+                    // Local Development Fallback (e.g., Live Server or local folder hosting)
+                    let searchPath = './images/';
+                    let response = await fetch(searchPath);
+                    if (!response.ok) {
+                        // Fallback lookup from subfolder /docs/images/ locally
+                        searchPath = './docs/images/';
+                        response = await fetch(searchPath);
+                    }
+                    
+                    if (!response.ok) throw new Error("Could not parse local folder list");
 
                     const textHTML = await response.text();
                     const parser = new DOMParser();
@@ -249,7 +296,7 @@
                         .filter(href => href && href.match(imageExtensions))
                         .map(href => {
                             if (!href.startsWith('http') && !href.startsWith('/') && !href.startsWith('./')) {
-                                return './images/' + href;
+                                return searchPath + href;
                             }
                             return href;
                         });
@@ -263,22 +310,21 @@
                         const decodedFilenameWithExt = decodeURIComponent(filenameWithExt);
                         const filename = decodedFilenameWithExt.replace(/\.[^/.]+$/, ""); 
                         
+                        // Strip parenthesis and square brackets (e.g., " (2)")
                         let cleanLabel = filename
-                            .replace(/\(at\)/gi, "@")
-                            .replace(/\[at\]/gi, "@");
+                            .replace(/\s*\([^)]*\)/g, "")
+                            .replace(/\s*\[[^\]]*\]/g, "");
 
-                        cleanLabel = cleanLabel.replace(/\s*\([^)]*\)/g, "").replace(/\s*\[[^\]]*\]/g, "");
-
-                        cleanLabel = cleanLabel.replace(/(?:^|[\s_])at_/gi, (match) => {
-                            if (match.startsWith(' ') || match.startsWith('_')) {
-                                return " @";
-                            }
-                            return "@";
+                        // Convert tags like "at_name", "at__name", "(at)name", "[at]name" to clear handles
+                        cleanLabel = cleanLabel.replace(/(?:^|[\s_])(?:at__?|\[at\]|\(at\))([a-zA-Z0-9_]+)/gi, (match, username) => {
+                            const hasSpace = match.match(/^\s/);
+                            return (hasSpace ? " " : "") + "@" + username;
                         });
 
                         const isDiscord = cleanLabel.toLowerCase().includes('discord');
                         cleanLabel = cleanLabel.replace(/-/g, " ");
 
+                        // Replace internal double underscores safely
                         let words = cleanLabel.split(' ');
                         words = words.map(word => {
                             if (word.startsWith('@')) {
@@ -334,6 +380,7 @@
             if (currentKey === lastDisplayedKey) return;
             lastDisplayedKey = currentKey;
 
+            // Trigger entry fade-out
             widget.classList.add('hidden-state');
 
             setTimeout(() => {
@@ -368,8 +415,9 @@
                     badgeElement.style.display = "none";
                 }
 
+                // Trigger entry fade-in
                 widget.classList.remove('hidden-state');
-            }, 300);
+            }, 400);
         }
 
         function handleImageError() {
