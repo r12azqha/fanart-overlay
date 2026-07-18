@@ -5,6 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Stream Overlay</title>
     
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <!-- Imports Montserrat weight 800 normal and weight 800 italic -->
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,800;1,800&display=swap" rel="stylesheet">
+    
     <style>
         body, html {
             margin: 0;
@@ -16,7 +21,9 @@
             align-items: flex-start;
             justify-content: flex-start;
             overflow: hidden;
-            font-family: Arial, Helvetica, sans-serif;
+            font-family: 'Montserrat', Arial, Helvetica, sans-serif;
+            font-style: italic;
+            font-weight: 800;
             color: #ffffff;
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
@@ -66,7 +73,9 @@
         .badge {
             display: inline-block;
             font-size: 14px;
-            font-weight: bold;
+            font-weight: 800;
+            font-family: 'Montserrat', Arial, Helvetica, sans-serif;
+            font-style: italic;
             letter-spacing: 1px;
             text-transform: uppercase;
             padding: 4px 12px;
@@ -89,7 +98,9 @@
 
         .single-line-text {
             font-size: 28px;
-            font-weight: bold;
+            font-weight: 800;
+            font-family: 'Montserrat', Arial, Helvetica, sans-serif;
+            font-style: italic;
             color: #ffffff;
             text-align: left;
             line-height: 1.2;
@@ -110,8 +121,6 @@
             margin-top: 20px;
         }
 
-
-        
         .test-controls {
             position: absolute;
             bottom: 15px;
@@ -126,9 +135,11 @@
             transition: opacity 0.2s ease;
             z-index: 100;
         }
+        
         .test-controls:hover {
             opacity: 1;
         }
+        
         .test-btn {
             background-color: #222;
             color: #fff;
@@ -138,7 +149,9 @@
             font-size: 13px;
             cursor: pointer;
             font-family: Arial, sans-serif;
+            font-style: normal;
         }
+        
         .test-btn:hover {
             background-color: #333;
         }
@@ -149,7 +162,7 @@
     <div id="widget" class="overlay-widget">
         
         <div id="image-frame" class="image-container-16-9">
-            <img id="overlay-pic" src="image_2b7a3f.png" onerror="handleImageError()" alt="Graphic Asset" class="overlay-image">
+            <img id="overlay-pic" src="" onerror="handleImageError()" alt="Graphic Asset" class="overlay-image">
         </div>
 
         <span id="overlay-badge" class="badge" style="background-color: #9333ea;">// FANART SHOWCASE //</span>
@@ -198,28 +211,49 @@
         }
 
         async function scanImagesDirectory() {
-            try {
-                const response = await fetch('./images/');
-                if (!response.ok) {
-                    throw new Error("Could not fetch directory contents");
-                }
+            const isGitHubPages = window.location.hostname.endsWith('.github.io');
+            const imageExtensions = /\.(jpe?g|png|gif|webp|svg)$/i;
+            let foundImages = [];
 
-                const textHTML = await response.text();
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(textHTML, 'text/html');
-                
-                const imageExtensions = /\.(jpe?g|png|gif|webp|svg)$/i;
-                const links = Array.from(doc.querySelectorAll('a'));
-                
-                const foundImages = links
-                    .map(link => link.getAttribute('href'))
-                    .filter(href => href && href.match(imageExtensions))
-                    .map(href => {
-                        if (!href.startsWith('http') && !href.startsWith('/') && !href.startsWith('./')) {
-                            return './images/' + href;
-                        }
-                        return href;
-                    });
+            try {
+                if (isGitHubPages) {
+                    // Extract Owner and Repository details directly from the URL
+                    const pathSegments = window.location.pathname.split('/').filter(Boolean);
+                    const owner = window.location.hostname.split('.')[0];
+                    
+                    // If pathSegments is empty, this is a user page (repo is named 'username.github.io')
+                    const repo = pathSegments.length > 0 ? pathSegments[0] : `${owner}.github.io`;
+                    
+                    const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/images`;
+                    
+                    const response = await fetch(apiUrl);
+                    if (!response.ok) throw new Error("GitHub API failed or folder does not exist");
+                    
+                    const files = await response.json();
+                    foundImages = files
+                        .filter(file => file.type === 'file' && file.name.match(imageExtensions))
+                        .map(file => file.path); // Path relative to root, e.g. "images/file.png"
+                        
+                } else {
+                    // Local Development Fallback: Attempt local directory index fetching (e.g. Live Server)
+                    const response = await fetch('./images/');
+                    if (!response.ok) throw new Error("Could not fetch local directory contents");
+
+                    const textHTML = await response.text();
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(textHTML, 'text/html');
+                    const links = Array.from(doc.querySelectorAll('a'));
+                    
+                    foundImages = links
+                        .map(link => link.getAttribute('href'))
+                        .filter(href => href && href.match(imageExtensions))
+                        .map(href => {
+                            if (!href.startsWith('http') && !href.startsWith('/') && !href.startsWith('./')) {
+                                return './images/' + href;
+                            }
+                            return href;
+                        });
+                }
 
                 const uniqueImages = [...new Set(foundImages)];
 
@@ -272,11 +306,11 @@
                     }
                 }
             } catch (err) {
-                console.log("Directory scanning empty or unavailable.");
+                console.error("Scanning empty or unavailable:", err.message);
+                document.getElementById('overlay-text').innerText = "Empty Folder / API Limit";
             }
         }
 
-        // # if currenttick is less than nine, output the corresponding fanart slide based on the two tick interval; if currenttick is less than twelve, output the discord slide layout; otherwise, fall back to rendering the hidden state
         function updateCycle() {
             if (currentTick < 9) {
                 let slide = { text: "// the folder is empty //", image: "", badge: "", badgeColor: "" };
@@ -296,7 +330,6 @@
         function renderSlide(slide, isHiddenCycle) {
             const widget = document.getElementById('widget');
             
-            // # generate a unique key string matching the layout properties to identify if the target asset has altered from the active domestic state; if currentkey matches lastdisplayedkey, return and break execution
             let currentKey = isHiddenCycle ? 'hidden' : (slide.image + '|' + slide.text + '|' + slide.badge + '|' + slide.badgeColor);
             if (currentKey === lastDisplayedKey) return;
             lastDisplayedKey = currentKey;
@@ -360,7 +393,6 @@
             }
         }
 
-        // # increment currenttick by one; if currenttick reaches or exceeds maxticks, reset trackers to zero, offset the base fanart rotation tracker by four, and run shufflearray to mix pool components
         function nextTick() {
             currentTick++;
             
