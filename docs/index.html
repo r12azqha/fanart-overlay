@@ -38,15 +38,16 @@
             flex-direction: column;
             align-items: flex-start;
             gap: 12px;
-            transition: opacity 0.4s cubic-bezier(0.25, 1, 0.5, 1), transform 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+            /* Premium, slower, cinematic transition curve (0.8 seconds) */
+            transition: opacity 0.8s cubic-bezier(0.25, 1, 0.25, 1), transform 0.8s cubic-bezier(0.25, 1, 0.25, 1);
             opacity: 1;
             transform: translateX(0);
         }
 
-        /* Smooth fade and slide out during transition states */
+        /* Deep slide and fade out for the slow transition states */
         .overlay-widget.hidden-state {
             opacity: 0;
-            transform: translateX(-15px);
+            transform: translateX(-20px);
         }
 
         .overlay-widget.cycle-hidden {
@@ -54,24 +55,28 @@
             pointer-events: none;
         }
 
-        .image-container-16-9 {
-            width: 100%;
-            aspect-ratio: 16 / 9;
+        /* Fixed bounding box size matching a perfect 16:9 ratio (380x213.75) */
+        .image-container-fixed {
+            width: 380px;
+            height: 213.75px; 
             background-color: transparent;
             display: flex;
             align-items: center;
-            justify-content: flex-start;
-            overflow: hidden;
+            justify-content: flex-start; /* Pins images left so the badge aligns perfectly */
+            overflow: visible; /* Allows the badge overlap and shadows to spill out elegantly */
             position: relative;
-            border-radius: 8px;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
         }
 
+        /* Rounded corners and drop shadows applied directly to the image boundaries */
         .overlay-image {
             max-width: 100%;
             max-height: 100%;
+            width: auto;
+            height: auto;
             object-fit: contain;
             display: block;
+            border-radius: 8px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
         }
 
         .badge {
@@ -92,13 +97,14 @@
             transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
         }
 
-        /* Dynamically align overlay text and badges when active image container is present */
+        /* Absolutely positions badge at the precise bottom line of the fixed container size */
         .has-image .badge {
             position: absolute;
             top: 213.75px; 
             left: 0;
             transform: translateY(-50%);
             margin-top: 0;
+            margin-bottom: 0;
         }
 
         .single-line-text {
@@ -113,18 +119,19 @@
             padding: 0;
             width: 100%;
             box-sizing: border-box;
-            /* Premium outlines and thick shadows to stand out against bright video streams */
+            /* Premium outlines and thick shadows to stand out against streaming feeds */
             text-shadow: 
                 3px 3px 4px rgba(0, 0, 0, 0.95),
                 -1.5px -1.5px 0 rgba(0, 0, 0, 0.95),  
                  1.5px -1.5px 0 rgba(0, 0, 0, 0.95),
                 -1.5px  1.5px 0 rgba(0, 0, 0, 0.95),
                  1.5px  1.5px 0 rgba(0, 0, 0, 0.95);
-            transition: margin-top 0.3s ease;
+            transition: margin-top 0.4s ease;
         }
 
+        /* Spacing below the fixed height boundary */
         .has-image .single-line-text {
-            margin-top: 20px;
+            margin-top: 20px; 
         }
 
         /* Test control panels configured cleanly for offline management */
@@ -168,7 +175,7 @@
 
     <div id="widget" class="overlay-widget">
         
-        <div id="image-frame" class="image-container-16-9">
+        <div id="image-frame" class="image-container-fixed">
             <img id="overlay-pic" src="" onerror="handleImageError()" alt="Graphic Asset" class="overlay-image">
         </div>
 
@@ -380,9 +387,10 @@
             if (currentKey === lastDisplayedKey) return;
             lastDisplayedKey = currentKey;
 
-            // Trigger entry fade-out
+            // Trigger entry fade-out slow animation
             widget.classList.add('hidden-state');
 
+            // Wait exactly 800ms matching the CSS transition ease before altering HTML structure
             setTimeout(() => {
                 if (isHiddenCycle) {
                     widget.classList.add('cycle-hidden');
@@ -415,9 +423,9 @@
                     badgeElement.style.display = "none";
                 }
 
-                // Trigger entry fade-in
+                // Trigger entry fade-in slow animation
                 widget.classList.remove('hidden-state');
-            }, 400);
+            }, 800);
         }
 
         function handleImageError() {
